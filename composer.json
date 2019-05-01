@@ -1,0 +1,7 @@
+{
+    "name": "mephiztopheles/webf",
+    "description": "Framework for webapps",
+    "type": "library",
+    "license": "MIT",
+    "require": {}
+}
