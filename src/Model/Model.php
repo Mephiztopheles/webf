@@ -5,7 +5,7 @@ namespace Mephiztopheles\webf\Model;
 use Mephiztopheles\webf\App\App;
 use DateTime;
 use Exception;
-use Exception\IllegalStateException;
+use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Routing\APIException;
 
 abstract class Model {

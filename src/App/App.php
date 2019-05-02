@@ -3,7 +3,7 @@
 namespace Mephiztopheles\webf\App;
 
 
-use Exception\IllegalStateException;
+use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Database\Connection;
 
 class App {

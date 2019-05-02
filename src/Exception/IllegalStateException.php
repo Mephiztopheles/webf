@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Exception;
+namespace Mephiztopheles\webf\Exception;
 
 
 use Exception;
