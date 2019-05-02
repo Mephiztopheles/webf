@@ -1,6 +1,6 @@
 <?php
 
-namespace Routing;
+namespace Mephiztopheles\webf\Routing;
 
 use Exception;
 use stdClass;
@@ -11,60 +11,58 @@ use stdClass;
  */
 function cleanUri ( $url ) {
 
-
     $phpSelf = dirname( $_SERVER[ 'PHP_SELF' ] );
 
     // prevent removing fist slash
     if ( $phpSelf != "/" )
         $url = str_replace( $phpSelf, '', $url );
 
-    // Query-string entfernen
-    $query_string = strpos( $url, '?' );
-    if ( $query_string !== false )
-        $url = substr( $url, 0, $query_string );
+    // remove query-string
+    $queryString = strpos( $url, '?' );
+    if ( $queryString !== false )
+        $url = substr( $url, 0, $queryString );
 
-    // Das ermöglicht es http://localhost/index.php/uri zu nutzen
+    // allows to use http://localhost/index.php/uri
     $basename = basename( $_SERVER[ 'PHP_SELF' ] );
     if ( substr( $url, 1, strlen( $basename ) ) == $basename )
         $url = substr( $url, strlen( $basename ) + 1 );
 
-    // Es soll auf jeden Fall mit einem / enden
+    // ensure it ends with a /
     $url = rtrim( $url, '/' ) . '/';
-    // doppelte slashes werden behoben
+    // remove double slashes
     $url = preg_replace( '/\/+/', '/', $url );
 
     return $url;
 }
 
-function hatRecht ( $name ) {
-
-    if ( !isset( $_SESSION[ "user_id" ] ) )
-        return false;
-
-    foreach ( $_SESSION[ "rechte" ] as $recht )
-        if ( $recht == $name )
-            return true;
-    return false;
-}
-
 /**
  * Used to handle routes  to eliminate the need to create a php file for every endpoint
- * @method post( $uri, $callback, ...$rechte )
- * @method get( $uri, $callback, ...$rechte )
- * @method delete( $uri, $callback, ...$rechte )
+ * @method post( $uri, $callback, ...$rights )
+ * @method get( $uri, $callback, ...$rights )
+ * @method delete( $uri, $callback, ...$rights )
  */
 class Router {
 
+    /**
+     * @var Response
+     * @type Response
+     */
+    private $response;
+
     private $root;
+    private $rights               = [];
     private $supportedHttpMethods = array(
         "GET",
         "POST",
         "DELETE"
     );
 
-    function __construct () {
 
-        $this->root = str_replace( $_SERVER[ 'PHP_SELF' ], "", Request::$requestUri );
+    function __construct ( $root, $rights ) {
+
+        $this->root     = $root;
+        $this->rights   = $rights;
+        $this->response = new Response();
     }
 
     /**
@@ -84,14 +82,14 @@ class Router {
         $formatted = $this->formatRoute( $route );
 
         if ( isset( $this->{strtolower( $name )}[ $formatted ] ) )
-            throw new Exception( 'Die URI "' . htmlspecialchars( $route ) . '" wurde schon registriert' );
+            throw new Exception( 'The URI "' . htmlspecialchars( $route ) . '" was already registered' );
 
-        $obj = new stdClass();
+        $descriptor = new stdClass();
 
-        $obj->method = $method;
-        $obj->rechte = $args;
+        $descriptor->method = $method;
+        $descriptor->rights = $args;
 
-        $this->{strtolower( $name )}[ $formatted ] = $obj;
+        $this->{strtolower( $name )}[ $formatted ] = $descriptor;
     }
 
     /**
@@ -121,44 +119,48 @@ class Router {
     }
 
     private function invalidMethodHandler () {
-        Response::methodNotAllowed();
+        $this->response->methodNotAllowed();
     }
 
     private function defaultRequestHandler () {
-        Response::notFound();
+        $this->response->notFound();
     }
 
     /**
      * @param $descriptor
      * @return bool
      */
-    private function checkRechte ( $descriptor ) {
+    private function checkAccess ( $descriptor ) {
 
-        if ( empty( $descriptor->rechte ) )
+        if ( empty( $descriptor->rights ) )
             return true;
 
-        foreach ( $descriptor->rechte as $recht )
-            if ( hatRecht( $recht ) )
-                return true;
+        if ( empty( $this->rights ) )
+            return false;
 
-        Response::notAllowed();
+        foreach ( $descriptor->rights as $right )
+            foreach ( $this->rights as $name )
+                if ( $name == $right )
+                    return true;
+
+        $this->response->notAllowed();
         return false;
     }
 
     /**
-     * überprüft, ob die uri auf eine route zutrifft und ruft dann den Controller auf
+     * checks the routes and calls the Controller
      */
-    function resolve () {
+    private function resolve () {
 
         $uri    = cleanUri( Request::$requestUri );
         $routes = $this->{strtolower( Request::$requestMethod )};
-        header( "-x-uri:$uri - " . Request::$requestUri );
+        header( "-x-uri:$uri" );
 
         foreach ( $routes as $route => $descriptor ) {
 
             if ( preg_match( $route, $uri, $matches ) ) {
 
-                if ( !$this->checkRechte( $descriptor ) )
+                if ( !$this->checkAccess( $descriptor ) )
                     return;
 
                 $params = array();
@@ -167,6 +169,8 @@ class Router {
                 foreach ( $matches as $key => $match )
                     if ( is_string( $key ) )
                         $params[] = $match;
+
+                $params[] = $this->response;
 
                 try {
 
@@ -190,11 +194,9 @@ class Router {
 
                     if ( $e instanceof APIException ) {
 
-                        header( "x-own-message:true" );
-                        header( Request::$serverProtocol . " {$e->getStatusCode()} {$e->getMessage()}" );
+                        $this->response->header( "x-message:true" )->header( Request::$serverProtocol . " {$e->getStatusCode()} {$e->getMessage()}" );
 
                     } else {
-
                         header( "{$_SERVER["SERVER_PROTOCOL"]} 500 {$e->getMessage()}" );
                     }
                 }
@@ -206,11 +208,7 @@ class Router {
         $this->defaultRequestHandler();
     }
 
-    /**
-     * Wenn jede Datei geladen wurde und jeder Code ausgeführt wurde, werden Klassen destructed und dann kann hier gehandelt werden
-     */
     function __destruct () {
-
         $this->resolve();
     }
 }
