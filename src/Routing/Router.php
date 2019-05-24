@@ -177,7 +177,7 @@ class Router {
                     if ( gettype( $descriptor->method ) == "string" ) {
 
                         $parts  = explode( "@", $descriptor->method );
-                        $clazz  = "\Controller\\" . $parts[ 0 ];
+                        $clazz  = $parts[ 0 ];
                         $method = $parts[ 1 ];
 
                         $result = call_user_func_array( array( new $clazz(), $method ), $params );
@@ -187,8 +187,13 @@ class Router {
                         $result = call_user_func_array( $descriptor->method, $params );
                     }
 
-                    if ( !empty( $result ) )
-                        echo $result;
+                    if ( !empty( $result ) ) {
+
+                        if ( $result instanceof Response )
+                            $result->send();
+                        else
+                            $this->response->json( $result )->send();
+                    }
 
                 } catch ( Exception $e ) {
 

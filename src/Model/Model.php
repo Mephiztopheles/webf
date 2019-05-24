@@ -2,22 +2,96 @@
 
 namespace Mephiztopheles\webf\Model;
 
-use Mephiztopheles\webf\App\App;
 use DateTime;
 use Exception;
+use Mephiztopheles\webf\App\App;
 use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Routing\APIException;
+use ReflectionClass;
+use ReflectionException;
+use ReflectionMethod;
+use ReflectionProperty;
+use RuntimeException;
+
+const lazyLoad = [];
 
 abstract class Model {
 
-    private static $protectedKeyWords = [ "id", "dates" ];
+    private static $protectedKeyWords = [ "dates", "lazyLoad" ];
 
     public $id;
 
     protected $dates = [];
 
+    /**
+     * @param string $name
+     * @return mixed
+     * @throws ReflectionException
+     */
+    public function __get ( string $name ) {
+
+        $method = "get" . ucfirst( $name );
+        if ( method_exists( $this, $method ) ) {
+
+            $reflection = new ReflectionMethod( $this, $method );
+            if ( !$reflection->isPublic() )
+                throw new RuntimeException( "The $method method is not public." );
+
+            if ( !isset( $this->$name ) )
+                $this->$name = $reflection->invoke( $this );
+        }
+
+        if ( property_exists( $this, $name ) ) {
+
+            $reflectedProperty = new ReflectionProperty( $this, $name );
+            $reflectedProperty->setAccessible( true );
+
+            $value = $reflectedProperty->getValue( $this );
+        } else {
+
+            $value       = null;
+            $this->$name = $value;
+        }
+
+
+        return $value;
+    }
+
+    /**
+     * @param string $name
+     * @param mixed $value
+     * @throws ReflectionException
+     */
+    public function __set ( string $name, $value ): void {
+
+        if ( !property_exists( $this, $name ) )
+            $this->$name = null;
+
+        $reflectedProperty = new ReflectionProperty( $this, $name );
+        $reflectedProperty->setAccessible( true );
+
+        $method = "set" . ucfirst( $name );
+        if ( method_exists( $this, $method ) ) {
+
+            $reflectionMethod = new ReflectionMethod( $this, $method );
+            if ( !$reflectionMethod->isPublic() )
+                throw new RuntimeException( "The $method method is not public." );
+
+            $reflectionMethod->invoke( $this, $value );
+
+        } else {
+            $reflectedProperty->setValue( $this, $value );
+        }
+    }
+
     public static function getTable () {
-        return self::toSnakeCase( get_called_class() );
+        return self::toSnakeCase( self::className() );
+    }
+
+    public static function className () {
+
+        $path = explode( '\\', get_called_class() );
+        return array_pop( $path );
     }
 
     /**
@@ -33,6 +107,9 @@ abstract class Model {
         $statement->run();
     }
 
+    /**
+     * @return array
+     */
     public function createQueryAndParameters () {
 
         $parameters = [];
@@ -42,11 +119,12 @@ abstract class Model {
             $query  = "UPDATE " . $this->getTable() . " SET";
             $values = [];
 
-            foreach ( $this as $k => $v ) {
+            foreach ( $this->getProperties( true ) as $k => $v ) {
 
-                if ( self::parameterIsKeyWord( $k ) )
+                if ( $k == "id" )
                     continue;
 
+                $k        = self::toSnakeCase( $k );
                 $values[] = " $k = ?";
 
                 $parameters[] = $v;
@@ -65,10 +143,12 @@ abstract class Model {
             $fields = [];
             $values = [];
 
-            foreach ( $this as $k => $v ) {
+            foreach ( $this->getProperties( true ) as $k => $v ) {
 
-                if ( self::parameterIsKeyWord( $k ) )
+                if ( $k == "id" )
                     continue;
+
+                $k = self::toSnakeCase( $k );
 
                 $fields[] = $k;
                 $values[] = "?";
@@ -84,8 +164,9 @@ abstract class Model {
 
     /**
      * @param int $id
-     * @return mixed
-     * @throws Exception
+     * @return null
+     * @throws APIException
+     * @throws IllegalStateException
      */
     public static function get ( int $id ) {
 
@@ -100,33 +181,113 @@ abstract class Model {
 
         $instance     = new $class();
         $instance->id = $id;
-
-        foreach ( $instance as $k => $v ) {
-
-            if ( self::parameterIsKeyWord( $k ) )
-                continue;
-
-            $instance->$k = $data->$k;
-
-            if ( !empty( $instance->dates ) ) {
-
-                if ( in_array( $k, $instance->dates ) )
-                    $instance->$k = new DateTime( $instance->$k );
-            }
-        }
+        $instance->fill( $data );
 
         return $instance;
     }
 
     /**
-     * @param $id
-     * @param $list
-     * @param $table
-     * @param $pk
-     * @param $fk
+     * @param string $class
+     * @param string $foreignKey
+     * @param string $privateKey
+     * @return mixed
+     * @throws IllegalStateException
+     * @throws APIException
+     */
+    protected final function hasOne ( string $class, string $foreignKey = null, string $privateKey = "id" ) {
+
+        if ( $foreignKey == null )
+            $foreignKey = self::toSnakeCase( self::className() );
+
+        $foreignKey = self::toSnakeCase( $foreignKey );
+
+        $statement = App::getConnection()->createQuery( "SELECT * FROM " . call_user_func( [ $class, "getTable" ] ) . " WHERE $foreignKey = ?" );
+        $statement->setParameter( 0, $this->$privateKey );
+
+        $data = $statement->get();
+
+        if ( !isset( $data ) )
+            return null;
+
+        $data[ $foreignKey ] = $this;
+
+        $instance = new $class();
+
+        /** @noinspection PhpUndefinedMethodInspection */
+        $instance->fill( $data );
+
+        return $instance;
+    }
+
+    /**
+     * @param string $class
+     * @param string|null $foreignKey
+     * @param string $privateKey
+     * @return array
+     * @throws APIException
+     * @throws IllegalStateException
+     */
+    protected final function hasMany ( string $class, string $foreignKey = null, string $privateKey = "id" ) {
+
+        if ( $foreignKey == null )
+            $foreignKey = self::toSnakeCase( self::className() );
+
+        $foreignKey = self::toSnakeCase( $foreignKey );
+
+        $statement = App::getConnection()->createQuery( "SELECT * FROM " . call_user_func( [ $class, "getTable" ] ) . " WHERE $foreignKey = ?" );
+        $statement->setParameter( 0, $this->$privateKey );
+
+        $data = $statement->list();
+        if ( !isset( $data ) )
+            return [];
+
+        $instances = [];
+        foreach ( $data as $datum ) {
+
+            $instance = new $class();
+            $instance->fill( $datum );
+
+            $instances[] = $instance;
+        }
+
+        return $instances;
+    }
+
+    /**
+     * @param array $attributes
      * @throws Exception
      */
-    private static function updateManyToMany ( $id, $list, $table, $pk, $fk ) {
+    protected function fill ( array $attributes ) {
+
+        foreach ( $this->getProperties() as $k ) {
+
+            if ( self::parameterIsKeyWord( $k ) )
+                continue;
+
+            $snakeCase = self::toSnakeCase( $k );
+            if ( isset( $attributes[ $snakeCase ] ) )
+                $this->$k = $attributes[ $snakeCase ];
+            else
+                $this->$k = null;
+
+            if ( !empty( $this->dates ) ) {
+
+                if ( in_array( $k, $this->dates ) )
+                    $this->$k = new DateTime( $this->$k );
+            }
+        }
+    }
+
+    /**
+     * @param int $id
+     * @param array $list
+     * @param string $table
+     * @param string $pk
+     * @param string $fk
+     * @throws IllegalStateException
+     * @throws Exception
+     */
+    private static function updateManyToMany ( int $id, array $list, string $table, string $pk, string $fk ) {
 
         $connection = App::getConnection();
         $connection->beginTransaction();
@@ -182,9 +343,53 @@ abstract class Model {
         return in_array( $name, self::$protectedKeyWords );
     }
 
+    private function getProperties ( bool $values = false ): array {
+
+        $properties = [];
+
+        try {
+
+            $reflection = new ReflectionClass( $this );
+
+            foreach ( $reflection->getProperties() as $property ) {
+
+                $key = $property->getName();
+
+                if ( self::parameterIsKeyWord( $key ) )
+                    continue;
+
+                if ( $values ) {
+
+                    $property->setAccessible( true );
+                    if ( isset( $this->$key ) )
+                        $properties[ $key ] = $property->getValue( $this );
+                    else
+                        $properties[ $key ] = null;
+                } else {
+                    $properties[] = $key;
+                }
+            }
+
+        } catch ( ReflectionException $e ) {
+        }
+
+        foreach ( $this as $key => $value ) {
+
+            if ( self::parameterIsKeyWord( $key ) )
+                continue;
+
+            if ( $values )
+                $properties[ $key ] = $value;
+            else
+                $properties[] = $key;
+        }
+
+        return $properties;
+    }
+
     private static function toSnakeCase ( $input ) {
 
-        preg_match_all( '!([A-Z][A-Z0-9]*(?=$|[A-Z][a-z0-9])|[A-Za-z][a-z0-9]+)!', $input, $matches );
+        preg_match_all( '!([A-Z][A-Z0-9]*(?=$|[A-Z][a-z0-9])|[A-Za-z][a-z0-9]*)!', $input, $matches );
         $ret = $matches[ 0 ];
 
         foreach ( $ret as &$match )

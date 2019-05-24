@@ -67,7 +67,7 @@ class Response {
         return $this;
     }
 
-    protected function send () {
+    public function send () {
         echo $this->content;
     }
 

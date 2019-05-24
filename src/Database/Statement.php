@@ -23,9 +23,9 @@ class Statement {
 
     private $parameters = [];
 
-    public function __construct ( Connection $connection, string $query ) {
+    public function __construct ( Connection $connection, string &$query ) {
 
-        $this->query      = $query;
+        $this->query      = &$query;
         $this->connection = $connection;
     }
 
@@ -70,7 +70,7 @@ class Statement {
 
         $query = $this->execute();
 
-        $result = $query->fetch( PDO::FETCH_OBJ );
+        $result = $query->fetch( PDO::FETCH_ASSOC );
         $query->closeCursor();
         return $result;
     }
@@ -128,5 +128,13 @@ class Statement {
 
         print_r( $this->connection->pdo()->errorInfo() );
         throw new APIException( "Error while executing" );
+    }
+
+    public function addParameter ( $v ) {
+        $this->parameters[] = $v;
+    }
+
+    public function toString (): string {
+        return $this->query;
     }
 }
