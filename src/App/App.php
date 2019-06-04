@@ -28,4 +28,16 @@ class App {
     public static function setConnection ( $connection ) {
         self::$connection = $connection;
     }
+
+    public static function warn ( string $message ) {
+        trigger_error( $message, E_USER_WARNING );
+    }
+
+    public static function log ( string $message ) {
+        trigger_error( $message, E_USER_NOTICE );
+    }
+
+    public static function error ( string $message ) {
+        trigger_error( $message, E_USER_ERROR );
+    }
 }

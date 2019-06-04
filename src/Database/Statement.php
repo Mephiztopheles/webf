@@ -4,9 +4,9 @@
 namespace Mephiztopheles\webf\Database;
 
 
+use Mephiztopheles\webf\Routing\APIException;
 use PDO;
 use PDOStatement;
-use Mephiztopheles\webf\Routing\APIException;
 use stdClass;
 
 class Statement {
@@ -29,13 +29,17 @@ class Statement {
         $this->connection = $connection;
     }
 
-    public function setParameter ( $name, $value ) {
+    public function __destruct () {
+        $this->connection = null;
+    }
+
+    public function setParameter ( $name, $value ): Statement {
 
         $this->parameters[ $name ] = $value;
         return $this;
     }
 
-    public function setParameters ( array $parameters ) {
+    public function setParameters ( array $parameters ): Statement {
 
         $this->parameters = array_merge( [], $parameters );
         return $this;
@@ -46,40 +50,33 @@ class Statement {
      * @return array
      * @throws APIException
      */
-    public function list () {
+    public function list (): array {
 
         $query = $this->execute();
 
         $results = [];
 
-        do {
-
-            $results = array_merge( $results, $query->fetchAll( PDO::FETCH_OBJ ) );
-
-        } while ( $query->nextRowset() );
+        while ( $row = $query->fetch( PDO::FETCH_OBJ, PDO::FETCH_ORI_NEXT ) )
+            $results[] = $row;
 
         return $results;
     }
 
     /**
      * Helper function to return the Database statements first result as object
-     * @return object|stdClass
+     * @return array|bool
      * @throws APIException
      */
     public function get () {
 
         $query = $this->execute();
 
-        $result = $query->fetch( PDO::FETCH_ASSOC );
+        $result = $query->fetch( PDO::FETCH_OBJ );
         $query->closeCursor();
-        return $result;
-    }
+        if ( $result == false )
+            return null;
 
-    /**
-     * @throws APIException
-     */
-    public function run () {
-        return $this->execute();
+        return $result;
     }
 
     /**
@@ -87,7 +84,7 @@ class Statement {
      * @return bool|PDOStatement
      * @throws APIException
      */
-    private function execute () {
+    public function execute (): PDOStatement {
 
         if ( empty( $this->parameters ) ) {
 
@@ -111,7 +108,7 @@ class Statement {
      * @return bool|PDOStatement
      * @throws APIException
      */
-    private function prepare ( $sql ) {
+    private function prepare ( $sql ): PDOStatement {
 
         $query = $this->connection->pdo()->prepare( $sql );
         if ( !$query )

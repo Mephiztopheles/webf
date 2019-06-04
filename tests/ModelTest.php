@@ -1,97 +1,91 @@
 <?php
 declare( strict_types = 1 );
 
-use Mephiztopheles\webf\App\App;
-use Mephiztopheles\webf\Database\Connection;
-use Mephiztopheles\webf\Database\Statement;
+use Mephiztopheles\webf\Database\relation\OneToManyRelation;
+use Mephiztopheles\webf\Database\relation\OneToOneRelation;
 use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Model\Model;
 use Mephiztopheles\webf\Routing\APIException;
-use PHPUnit\Framework\MockObject\MockObject;
-use PHPUnit\Framework\TestCase;
+use Mephiztopheles\webf\test\DBTest;
 
-class Person extends Model {
+class Customer extends Model {
 
-    public  $firstName;
-    private $name;
+    public $firstName;
+    public $name;
 
     /**
-     * @return Address
-     * @throws IllegalStateException
-     * @throws APIException
+     * @return OneToOneRelation
      */
-    public function getAddress (): Address {
+    public function getAddress (): OneToOneRelation {
         return $this->hasOne( '\Address' );
     }
 
     /**
-     * @return array
-     * @throws APIException
-     * @throws IllegalStateException
+     * @return OneToManyRelation
      */
-    public function getParents () {
-        return $this->hasMany( '\Person' );
+    public function getParents (): OneToManyRelation {
+        return $this->hasMany( '\Customer' );
     }
 }
 
 class Address extends Model {
 
-    public $person;
+    public $customer;
 }
 
 class CamelCase extends Model {
 
 }
 
-final class ModelTest extends TestCase {
-
-    /**
-     * @var MockObject
-     */
-    private $stub;
-
-    /**
-     * @var MockObject
-     */
-    private $query;
-
-    /**
-     * @throws ReflectionException
-     */
-    protected function setUp (): void {
-
-        $this->stub  = $this->createMock( Connection::class );
-        $this->query = $this->createMock( Statement::class );
-        $this->stub->method( 'createQuery' )->willReturn( $this->query );
-        App::setConnection( $this->stub );
-    }
+final class ModelTest extends DBTest {
 
     public function testTableIsCorrect (): void {
 
-        $this->assertEquals( 'person', Person::getTable() );
+        $this->assertEquals( 'customer', Customer::getTable() );
         $this->assertEquals( 'camel_case', ( new CamelCase() )->getTable() );
     }
 
+    protected function setUp (): void {
+
+        parent::setUp();
+
+        $this->connection->createQuery( "CREATE TABLE customer(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, name varchar(255), first_name varchar(255))" )->execute();
+        $this->connection->createQuery( "CREATE TABLE camel_case(id INTEGER PRIMARY KEY AUTOINCREMENT, a INTEGER , b INTEGER)" )->execute();
+        $this->connection->createQuery( "CREATE TABLE address(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER)" )->execute();
+    }
+
+    /**
+     * @throws APIException
+     * @throws IllegalStateException
+     */
     public function testQueryIsCorrect (): void {
 
-        $p            = new Person();
-        $p->firstName = "Peter";
+        $customer            = new Customer();
+        $customer->firstName = "Peter";
+        $this->assertEquals( "INSERT INTO customer( first_name, name ) VALUES ( ?, ? )", $customer->createQueryAndParameters()[ "query" ] );
 
-        $this->assertEquals( "INSERT INTO person( first_name, name ) VALUES ( ?, ? )", $p->createQueryAndParameters()[ "query" ] );
+        $customer->save();
 
-        $p->id = 1;
+        $data = $this->connection->createQuery( "SELECT * FROM customer WHERE id = 1" )->get();
+        $this->assertEquals( $customer->firstName, $data->first_name );
 
-        $this->assertEquals( "UPDATE person SET first_name = ?, name = ? WHERE id = ?", $p->createQueryAndParameters()[ "query" ] );
+        $customer->save();
 
-        $p->name = "Griffin";
-        unset( $p->id );
-        $this->assertEquals( "INSERT INTO person( first_name, name ) VALUES ( ?, ? )", $p->createQueryAndParameters()[ "query" ] );
+        $this->assertEquals( "UPDATE customer SET first_name = ?, name = ? WHERE id = ?", $customer->createQueryAndParameters()[ "query" ] );
 
-        $c = new CamelCase();
+        $customer->name = "Griffin";
+        $customer->save();
 
-        $c->b = "b";
-        $c->a = "a";
-        $this->assertEquals( "INSERT INTO camel_case( b, a ) VALUES ( ?, ? )", $c->createQueryAndParameters()[ "query" ] );
+        $data = $this->connection->createQuery( "SELECT * FROM customer WHERE id = 1" )->get();
+        $this->assertEquals( $customer->name, $data->name );
+
+        $camelCase = new CamelCase();
+
+        $camelCase->b = "b";
+        $camelCase->a = "a";
+        $camelCase->save();
+        $data = $this->connection->createQuery( "SELECT * FROM camel_case WHERE id = 1" )->get();
+        $this->assertEquals( $camelCase->a, $data->a );
     }
 
     /**
@@ -99,64 +93,58 @@ final class ModelTest extends TestCase {
      */
     public function testGet (): void {
 
-        $person     = new Person();
-        $person->id = 1;
+        $customer     = new Customer();
+        $customer->id = 1;
 
         $camelCase     = new CamelCase();
         $camelCase->id = 1;
 
-        $personData    = [ "id" => 1, "first_name" => null, "name" => null ];
-        $camelCaseData = [ "id" => 1 ];
+        $this->connection->createQuery( "INSERT INTO customer(id) VALUES(1)" )->execute();
+        $this->connection->createQuery( "INSERT INTO camel_case(id) VALUES(1)" )->execute();
 
-        $this->query->expects( $this->at( 1 ) )->method( 'get' )->willReturn( $personData );
-        $this->query->expects( $this->at( 3 ) )->method( 'get' )->willReturn( $camelCaseData );
-        $this->query->expects( $this->at( 5 ) )->method( 'get' )->willReturn( $camelCaseData );
-        $this->query->expects( $this->at( 7 ) )->method( 'get' )->willReturn( null );
+        $this->assertEquals( $customer, Customer::get( 1 ) );
 
-        $this->assertEquals( $person, Person::get( 1 ) );
-
-        $this->assertNotEquals( $person, CamelCase::get( 1 ) );
+        $this->assertNotEquals( $customer, CamelCase::get( 1 ) );
         $this->assertEquals( $camelCase, CamelCase::get( 1 ) );
 
+        $this->connection->createQuery( "DELETE FROM camel_case" )->execute();
         $this->assertNull( CamelCase::get( 1 ) );
     }
 
     public function testHasOne () {
 
-        $person = new Person;
+        $customer     = new Customer;
+        $customer->id = 1;
 
+        $this->connection->createQuery( "INSERT INTO address(id, customer_id) VALUES(1,1)" )->execute();
 
-        $data = [ "id" => 1 ];
+        $this->assertEquals( $customer, $customer->address->customer );
 
-        $this->query->expects( $this->at( 1 ) )->method( 'get' )->willReturn( $data );
+        $customer          = new Customer();
+        $customer->address = null;
 
-        $this->assertEquals( $person, $person->address->person );
-
-        $person          = new Person();
-        $person->address = null;
-
-        $this->assertNull( $person->address );
-        $this->query->expects( $this->at( 1 ) )->method( 'get' )->willReturn( $data );
-        unset( $person->address );
-        $this->assertEquals( $person, $person->address->person );
+        $this->assertNull( $customer->address );
+        unset( $customer->address );
+        $this->assertNull( $customer->address );
     }
 
     function testHasMany () {
 
-        $person = new Person;
+        $customer     = new Customer;
+        $customer->id = 1;
 
-        $data = [ [ "id" => 3 ], [ "id" => 2 ] ];
+        $this->connection->createQuery( "INSERT INTO customer(id) VALUES(1)" )->execute();
+        $this->connection->createQuery( "INSERT INTO customer(id, customer_id) VALUES(2,1)" )->execute();
+        $this->connection->createQuery( "INSERT INTO customer(id, customer_id) VALUES(3,1)" )->execute();
 
-
-        $parent1     = new Person();
-        $parent1->id = 3;
-        $parent2     = new Person();
-        $parent2->id = 2;
+        $parent1     = new Customer();
+        $parent1->id = 2;
+        $parent2     = new Customer();
+        $parent2->id = 3;
         $parents     = [ $parent1, $parent2 ];
 
-        $this->query->expects( $this->at( 1 ) )->method( 'list' )->willReturn( $data );
 
-        $this->assertEquals( $parents, $person->parents );
+        $this->assertEquals( $parents, $customer->parents );
     }
 }
 

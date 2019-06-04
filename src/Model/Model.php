@@ -5,6 +5,11 @@ namespace Mephiztopheles\webf\Model;
 use DateTime;
 use Exception;
 use Mephiztopheles\webf\App\App;
+use Mephiztopheles\webf\Database\QueryBuilder;
+use Mephiztopheles\webf\Database\relation\ManyToManyRelation;
+use Mephiztopheles\webf\Database\relation\OneToManyRelation;
+use Mephiztopheles\webf\Database\relation\OneToOneRelation;
+use Mephiztopheles\webf\Database\relation\Relation;
 use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Routing\APIException;
 use ReflectionClass;
@@ -23,6 +28,20 @@ abstract class Model {
 
     protected $dates = [];
 
+    public function __construct ( $data = null ) {
+
+        if ( isset( $data ) ) {
+
+            try {
+
+                $this->fill( $data );
+
+            } catch ( Exception $e ) {
+                App::error( $e->getMessage() );
+            }
+        }
+    }
+
     /**
      * @param string $name
      * @return mixed
@@ -37,8 +56,13 @@ abstract class Model {
             if ( !$reflection->isPublic() )
                 throw new RuntimeException( "The $method method is not public." );
 
-            if ( !isset( $this->$name ) )
+            if ( !isset( $this->$name ) ) {
+
+
                 $this->$name = $reflection->invoke( $this );
+                if ( $this->$name instanceof Relation )
+                    $this->$name = $this->$name->get();
+            }
         }
 
         if ( property_exists( $this, $name ) ) {
@@ -52,7 +76,6 @@ abstract class Model {
             $value       = null;
             $this->$name = $value;
         }
-
 
         return $value;
     }
@@ -100,11 +123,17 @@ abstract class Model {
      */
     public function save () {
 
-        $qap = $this->createQueryAndParameters();
 
-        $statement = App::getConnection()->createQuery( $qap[ "query" ] );
-        $statement->setParameters( $qap[ "parameters" ] );
-        $statement->run();
+        $qb = new QueryBuilder();
+
+        $qb->table( $this->getTable() );
+        if ( isset( $this->id ) )
+            $qb->update( $this );
+        else
+            $qb->insert( $this );
+
+        if ( !isset( $this->id ) )
+            $this->id = App::getConnection()->lastInsertId();
     }
 
     /**
@@ -121,7 +150,7 @@ abstract class Model {
 
             foreach ( $this->getProperties( true ) as $k => $v ) {
 
-                if ( $k == "id" )
+                if ( $k == "id" || $v instanceof Model )
                     continue;
 
                 $k        = self::toSnakeCase( $k );
@@ -129,7 +158,6 @@ abstract class Model {
 
                 $parameters[] = $v;
             }
-
 
             $query .= join( ",", $values );
             $query .= " WHERE id = ?";
@@ -145,7 +173,7 @@ abstract class Model {
 
             foreach ( $this->getProperties( true ) as $k => $v ) {
 
-                if ( $k == "id" )
+                if ( $k == "id" || $v instanceof Model )
                     continue;
 
                 $k = self::toSnakeCase( $k );
@@ -179,9 +207,8 @@ abstract class Model {
         if ( !isset( $data ) )
             return null;
 
-        $instance     = new $class();
+        $instance     = new $class( $data );
         $instance->id = $id;
-        $instance->fill( $data );
 
         return $instance;
     }
@@ -191,73 +218,63 @@ abstract class Model {
      * @param string $foreignKey
      * @param string $privateKey
      * @return mixed
-     * @throws IllegalStateException
-     * @throws APIException
      */
     protected final function hasOne ( string $class, string $foreignKey = null, string $privateKey = "id" ) {
 
         if ( $foreignKey == null )
-            $foreignKey = self::toSnakeCase( self::className() );
+            $foreignKey = self::className() . "_id";
 
         $foreignKey = self::toSnakeCase( $foreignKey );
 
-        $statement = App::getConnection()->createQuery( "SELECT * FROM " . call_user_func( [ $class, "getTable" ] ) . " WHERE $foreignKey = ?" );
-        $statement->setParameter( 0, $this->$privateKey );
-
-        $data = $statement->get();
-
-        if ( !isset( $data ) )
-            return null;
-
-        $data[ $foreignKey ] = $this;
-
-        $instance = new $class();
-
-        /** @noinspection PhpUndefinedMethodInspection */
-        $instance->fill( $data );
-
-        return $instance;
+        return new OneToOneRelation( $this, $class, call_user_func( [ $class, "getTable" ] ), $foreignKey, $privateKey );
     }
 
     /**
      * @param string $class
      * @param string|null $foreignKey
      * @param string $privateKey
-     * @return array
-     * @throws APIException
-     * @throws IllegalStateException
+     * @return mixed
      */
     protected final function hasMany ( string $class, string $foreignKey = null, string $privateKey = "id" ) {
 
         if ( $foreignKey == null )
-            $foreignKey = self::toSnakeCase( self::className() );
+            $foreignKey = self::className() . "Id";
+
+        $foreignKey = self::toSnakeCase( $foreignKey );
+        $privateKey = self::toSnakeCase( $privateKey );
+        return new OneToManyRelation( $this, $class, call_user_func( [ $class, "getTable" ] ), $foreignKey, $privateKey );
+    }
+
+    protected final function belongsToMany ( string $class, string $table = null, string $foreignKey = null, string $privateKey = null ) {
+
+        $foreignTable = call_user_func( [ $class, "getTable" ] );
+        $privateTable = $this->getTable();
+
+        if ( $foreignKey == null )
+            $foreignKey = $foreignTable . "Id";
 
         $foreignKey = self::toSnakeCase( $foreignKey );
 
-        $statement = App::getConnection()->createQuery( "SELECT * FROM " . call_user_func( [ $class, "getTable" ] ) . " WHERE $foreignKey = ?" );
-        $statement->setParameter( 0, $this->$privateKey );
+        if ( $privateKey == null )
+            $privateKey = $privateTable . "Id";
 
-        $data = $statement->list();
-        if ( !isset( $data ) )
-            return [];
+        $privateKey = self::toSnakeCase( $privateKey );
 
-        $instances = [];
-        foreach ( $data as $datum ) {
+        if ( $table == null ) {
 
-            $instance = new $class();
-            $instance->fill( $datum );
-
-            $instances[] = $instance;
+            $names = [ $foreignTable, $privateTable ];
+            sort( $names );
+            $table = $names[ 0 ] . "_" . $names[ 1 ];
         }
 
-        return $instances;
+        return new ManyToManyRelation( $this, $class, $table, $foreignKey, $privateKey );
     }
 
     /**
      * @param array $attributes
      * @throws Exception
      */
-    protected function fill ( array $attributes ) {
+    protected function fill ( $attributes ) {
 
         foreach ( $this->getProperties() as $k ) {
 
@@ -265,8 +282,8 @@ abstract class Model {
                 continue;
 
             $snakeCase = self::toSnakeCase( $k );
-            if ( isset( $attributes[ $snakeCase ] ) )
-                $this->$k = $attributes[ $snakeCase ];
+            if ( isset( $attributes->$snakeCase ) )
+                $this->$k = $attributes->$snakeCase;
             else
                 $this->$k = null;
 
@@ -275,67 +292,6 @@ abstract class Model {
                 if ( in_array( $k, $this->dates ) )
                     $this->$k = new DateTime( $this->$k );
             }
-        }
-    }
-
-    /**
-     * @param int $id
-     * @param array $list
-     * @param string $table
-     * @param string $pk
-     * @param string $fk
-     * @throws IllegalStateException
-     * @throws Exception
-     */
-    private static function updateManyToMany ( int $id, array $list, string $table, string $pk, string $fk ) {
-
-        $connection = App::getConnection();
-        $connection->beginTransaction();
-
-        try {
-
-            if ( count( $list ) == 0 ) {
-
-                $query = $connection->createQuery( "DELETE FROM $table where $pk = :id" );
-
-                $query->setParameter( "id", $id );
-                $query->run();
-
-            } else {
-
-                $ids = [];
-                foreach ( $list as $entry ) {
-
-                    if ( gettype( $entry->id ) === "integer" )
-                        $ids[] = $entry->id;
-                    else
-                        throw new APIException( "Primary keys has to be Integer", 400 );
-                }
-
-                $idsString = implode( ",", $ids );
-
-                $query = $connection->createQuery( "DELETE FROM $table where $fk not in ($idsString) and $pk = :id" );
-                $query->setParameter( "id", $id );
-                $query->run();
-
-                foreach ( $list as $entry ) {
-
-                    $query = $connection->createQuery( "SELECT * FROM $table WHERE $pk = :id AND $fk = :fk" );
-                    $query->setParameter( "id", $id )->setParameter( "fk", $entry->id );
-                    $result = $query->run();
-
-                    if ( $result->rowCount() == 0 ) {
-
-                        $query = $connection->createQuery( "INSERT INTO $table($pk, $fk) VALUES(:id,:fk)" );
-                        $query->setParameter( "id", $id )->setParameter( "fk", $entry->id );
-                        $query->run();
-                    }
-                }
-            }
-        } catch ( Exception $e ) {
-
-            $connection->rollBack();
-            throw $e;
         }
     }
 

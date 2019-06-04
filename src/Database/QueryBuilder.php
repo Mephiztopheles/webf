@@ -8,13 +8,14 @@ use Mephiztopheles\webf\App\App;
 use Mephiztopheles\webf\Database\clause\WhereClause;
 use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Routing\APIException;
+use PDOStatement;
 
 class QueryBuilder {
 
     private $table;
-    private $where = [];
     private $max;
     private $offset;
+    private $where = [];
 
     public function table ( string $table ) {
 
@@ -22,7 +23,7 @@ class QueryBuilder {
         return $this;
     }
 
-    public function where ( $name, $value, $operation = null ) {
+    public function where ( $name, $value, $operation = "=" ) {
 
         $this->where[] = new WhereClause( self::toSnakeCase( $name ), $value, $operation );
         return $this;
@@ -56,7 +57,7 @@ class QueryBuilder {
     }
 
     /**
-     * @return object|\stdClass
+     * @return array
      * @throws APIException
      * @throws IllegalStateException
      */
@@ -64,24 +65,25 @@ class QueryBuilder {
 
         $query = "SELECT * FROM $this->table";
 
-        $statement = new Statement( App::getConnection(), $query );
-        $this->applyWhere( $statement, $query );
+        $parameters = $this->applyWhere( $query );
+        $statement  = App::getConnection()->createQuery( $query );
+        $statement->setParameters( $parameters );
 
         return $statement->get();
     }
 
     /**
      * @param $object
-     * @return Statement
-     * @throws IllegalStateException
+     * @return bool|PDOStatement
      * @throws APIException
+     * @throws IllegalStateException
      */
     public function update ( $object ) {
 
-        $query     = "UPDATE $this->table SET";
-        $statement = new Statement( App::getConnection(), $query );
+        $query = "UPDATE $this->table SET";
 
-        $values = [];
+        $values     = [];
+        $parameters = [];
 
         foreach ( $object as $k => $v ) {
 
@@ -89,15 +91,16 @@ class QueryBuilder {
             $values[] = " $k = ?";
 
             $parameters[] = $v;
-            $statement->addParameter( $v );
         }
 
-        $query .= join( ",", $values );
-        $this->applyWhere( $statement, $query );
+        $this->where( "id", $object->id );
+        $query      .= join( ",", $values );
+        $parameters = array_merge( $parameters, $this->applyWhere( $query ) );
 
-        $statement->run();
+        $statement = App::getConnection()->createQuery( $query );
+        $statement->setParameters( $parameters );
 
-        return $statement;
+        return $statement->execute();
     }
 
     /**
@@ -128,7 +131,7 @@ class QueryBuilder {
 
         $query .= "( " . join( ", ", $fields ) . " ) VALUES ( " . join( ", ", $values ) . " )";
 
-        $statement->run();
+        $statement->execute();
 
         return $statement;
     }
@@ -144,17 +147,20 @@ class QueryBuilder {
         return implode( '_', $ret );
     }
 
-    private function applyWhere ( Statement $statement, string &$query ) {
+    private function applyWhere ( string &$query ) {
 
+        $parameters = [];
         if ( !empty( $this->where ) ) {
 
             $query .= " WHERE";
             foreach ( $this->where as $clause ) {
 
-                $query .= $clause->get();
-                $statement->addParameter( $clause->getValue() );
+                $query        .= " " . $clause->get();
+                $parameters[] = $clause->getValue();
             }
         }
+
+        return $parameters;
     }
 }
 

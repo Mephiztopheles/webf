@@ -53,11 +53,10 @@ class Response {
 
     public function status ( $status, $message = null ) {
 
-        if ( !isset( $message ) ) {
+        if ( !isset( $message ) )
             $message = $this->getMessageToStatus( $status );
-        }
 
-        return $this->header( Request::$serverProtocol . " $status $message" );
+        return $this->header( $_SERVER[ "SERVER_PROTOCOL" ] . " $status $message" );
     }
 
     public function header ( $header ) {

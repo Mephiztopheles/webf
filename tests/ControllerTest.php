@@ -1,18 +1,15 @@
 <?php
 
 
-use Mephiztopheles\webf\App\App;
 use Mephiztopheles\webf\Controller\Controller;
-use Mephiztopheles\webf\Database\Connection;
-use Mephiztopheles\webf\Database\Statement;
 use Mephiztopheles\webf\Model\Model;
 use Mephiztopheles\webf\Routing\Response;
-use PHPUnit\Framework\TestCase;
+use Mephiztopheles\webf\test\DBTest;
 
 class Person extends Model {
 
-    public  $firstName;
-    private $name;
+    public $firstName;
+    public $name;
 }
 
 class PersonController extends Controller {
@@ -20,27 +17,25 @@ class PersonController extends Controller {
     protected $modelClass = Person::class;
 }
 
-class ControllerTest extends TestCase {
+class ControllerTest extends DBTest {
+
+    protected function setUp (): void {
+
+        parent::setUp();
+        $this->connection->createQuery( "CREATE TABLE person(id INTEGER PRIMARY KEY AUTOINCREMENT, person_id INTEGER, name varchar(255), first_name varchar(255))" )->execute();
+    }
 
     /**
      * @runInSeparateProcess
-     * @throws ReflectionException
      */
     function testGet () {
 
         $controller = new PersonController();
-        $stub       = $this->createMock( Connection::class );
-        $query      = $this->createMock( Statement::class );
 
-        $data = [ "id" => 1 ];
-
-        $stub->method( 'createQuery' )->willReturn( $query );
-        $query->expects( $this->at( 1 ) )->method( 'get' )->willReturn( $data );
-
-        App::setConnection( $stub );
         $person     = new Person();
-        $person->id = 1;
-        $this->expectOutputString( "{\"firstName\":null,\"id\":1}" );
+        $person->save();
+
+        $this->expectOutputString( "{\"firstName\":null,\"name\":null,\"id\":1}" );
         $controller->get( new Response(), 1 )->send();
     }
 }

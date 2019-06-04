@@ -10,18 +10,31 @@ namespace Mephiztopheles\webf\Routing;
  */
 class Request {
 
-    public static $serverProtocol;
-    public static $requestMethod;
-    public static $requestUri;
-    public static $documentRoot;
+    public $serverProtocol;
+    public $requestMethod;
+    public $requestUri;
+    public $documentRoot;
+    public $body;
+    public $query;
+
+    public function __construct () {
+
+        $this->serverProtocol = $_SERVER[ "SERVER_PROTOCOL" ];
+        $this->documentRoot   = $_SERVER[ "DOCUMENT_ROOT" ];
+        $this->requestUri     = $_SERVER[ "REQUEST_URI" ];
+        $this->requestMethod  = $_SERVER[ "REQUEST_METHOD" ];
+
+        $this->body  = $this->getBody();
+        $this->query = $this->getQuery();
+    }
 
     /**
      * retrieves POST input decoded from JSON
      * @return mixed|null
      */
-    public static function getBody () {
+    private function getBody () {
 
-        if ( self::$requestMethod === "GET" )
+        if ( $this->requestMethod === "GET" )
             return null;
 
         return json_decode( file_get_contents( 'php://input' ) );
@@ -31,7 +44,7 @@ class Request {
      * retrieves GET input as stdClass and automatically parses numeric parameters
      * @return mixed
      */
-    public static function getQuery () {
+    private function getQuery () {
 
         $output = json_decode( json_encode( $_GET ) );
 
@@ -42,8 +55,3 @@ class Request {
         return $output;
     }
 }
-
-Request::$documentRoot = $_SERVER[ "DOCUMENT_ROOT" ];
-Request::$requestUri = $_SERVER[ "REQUEST_URI" ];
-Request::$requestMethod = $_SERVER[ "REQUEST_METHOD" ];
-Request::$serverProtocol = $_SERVER[ "SERVER_PROTOCOL" ];

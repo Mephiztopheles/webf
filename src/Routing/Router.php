@@ -49,6 +49,11 @@ class Router {
      */
     private $response;
 
+    /**
+     * @var Request
+     */
+    private $request;
+
     private $root;
     private $rights               = [];
     private $supportedHttpMethods = array(
@@ -57,21 +62,28 @@ class Router {
         "DELETE"
     );
 
+    private $get = [];
 
-    function __construct ( $root, $rights ) {
+    /**
+     * Router constructor.
+     * @param string $root
+     * @param array $rights
+     */
+    function __construct ( string $root, array $rights ) {
 
         $this->root     = $root;
         $this->rights   = $rights;
         $this->response = new Response();
+        $this->request  = new Request();
     }
 
     /**
      * magic method
-     * @param $name string name der Methode
-     * @param $args array arguments
+     * @param string $name Name of the method
+     * @param array $args arguments
      * @throws Exception
      */
-    function __call ( $name, $args ) {
+    function __call ( string $name, array $args ) {
 
         list( $route, $method ) = $args;
         array_splice( $args, 0, 2 );
@@ -93,10 +105,10 @@ class Router {
     }
 
     /**
-     * @param $route (string)
+     * @param string $route
      * @return string
      */
-    private function formatRoute ( $route ) {
+    private function formatRoute ( string $route ) {
 
         // Make sure the route ends in a / since all of the URLs will
         $route = rtrim( $route, '/' ) . '/';
@@ -152,9 +164,15 @@ class Router {
      */
     private function resolve () {
 
-        $uri    = cleanUri( Request::$requestUri );
-        $routes = $this->{strtolower( Request::$requestMethod )};
-        header( "-x-uri:$uri" );
+        $uri           = cleanUri( $this->request->requestUri );
+        $requestMethod = strtolower( $this->request->requestMethod );
+
+        if ( in_array( $requestMethod, $this->supportedHttpMethods ) )
+            $routes = $this->{$requestMethod};
+        else
+            $routes = $this->get;
+
+        $this->response->header( "-x-uri:$uri" );
 
         foreach ( $routes as $route => $descriptor ) {
 
@@ -163,14 +181,12 @@ class Router {
                 if ( !$this->checkAccess( $descriptor ) )
                     return;
 
-                $params = array();
+                $params = [ $this->request, $this->response ];
 
                 // named Parameters
                 foreach ( $matches as $key => $match )
                     if ( is_string( $key ) )
                         $params[] = $match;
-
-                $params[] = $this->response;
 
                 try {
 
@@ -183,7 +199,6 @@ class Router {
                         $result = call_user_func_array( array( new $clazz(), $method ), $params );
 
                     } else {
-
                         $result = call_user_func_array( $descriptor->method, $params );
                     }
 
@@ -197,13 +212,10 @@ class Router {
 
                 } catch ( Exception $e ) {
 
-                    if ( $e instanceof APIException ) {
-
-                        $this->response->header( "x-message:true" )->header( Request::$serverProtocol . " {$e->getStatusCode()} {$e->getMessage()}" );
-
-                    } else {
-                        header( "{$_SERVER["SERVER_PROTOCOL"]} 500 {$e->getMessage()}" );
-                    }
+                    if ( $e instanceof APIException )
+                        $this->response->header( "x-message: {$e->getMessage()}" )->status( $e->getStatusCode() );
+                    else
+                        header( "{$this->request->serverProtocol} 500 {$e->getMessage()}" );
                 }
 
                 return;

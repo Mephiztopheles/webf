@@ -8,8 +8,9 @@
     "ext-json": "*"
   },
   "autoload":    {
-    "psr-4":    {
-      "Mephiztopheles\\webf\\": "src/"
+    "psr-4": {
+      "Mephiztopheles\\webf\\":       "src/",
+      "Mephiztopheles\\webf\\test\\": "tests/"
     }
   },
   "require-dev": {
