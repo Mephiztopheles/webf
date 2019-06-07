@@ -9,23 +9,23 @@ use Mephiztopheles\webf\App\App;
 
 class OneToManyRelation extends Relation {
 
-    public function update () {
+    public function update() {
         return "UPDATE $this->table SET $this->foreignKey = ? WHERE id = ?";
     }
 
-    public function get () {
+    public function get() {
 
         try {
 
             $statement = App::getConnection()->createQuery( "SELECT * FROM $this->table WHERE $this->foreignKey = ?" );
 
             $statement->setParameter( 0, $this->entity->id );
-            $data    = $statement->list();
+            $data = $statement->list();
             $results = [];
 
             foreach ( $data as $values ) {
 
-                $instace   = new $this->class( $values );
+                $instace = new $this->class( $values );
                 $results[] = $instace;
             }
 

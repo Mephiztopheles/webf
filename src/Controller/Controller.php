@@ -10,7 +10,7 @@ class Controller {
 
     protected $modelClass;
 
-    public function get ( Response $response, int $id ): Response {
+    public function get( Response $response, int $id ): Response {
         return $response->json( call_user_func( [ $this->modelClass, "get" ], $id ) );
     }
 }

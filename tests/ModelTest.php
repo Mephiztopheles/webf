@@ -1,51 +1,25 @@
 <?php
-declare( strict_types = 1 );
+declare( strict_types=1 );
 
-use Mephiztopheles\webf\Database\relation\OneToManyRelation;
-use Mephiztopheles\webf\Database\relation\OneToOneRelation;
 use Mephiztopheles\webf\Exception\IllegalStateException;
-use Mephiztopheles\webf\Model\Model;
 use Mephiztopheles\webf\Routing\APIException;
 use Mephiztopheles\webf\test\DBTest;
+use Mephiztopheles\webf\test\Model\Animal;
+use Mephiztopheles\webf\test\Model\CamelCase;
+use Mephiztopheles\webf\test\Model\Cat;
+use Mephiztopheles\webf\test\Model\Customer;
+use Mephiztopheles\webf\test\Model\Dog;
 
-class Customer extends Model {
-
-    public $firstName;
-    public $name;
-
-    /**
-     * @return OneToOneRelation
-     */
-    public function getAddress (): OneToOneRelation {
-        return $this->hasOne( '\Address' );
-    }
-
-    /**
-     * @return OneToManyRelation
-     */
-    public function getParents (): OneToManyRelation {
-        return $this->hasMany( '\Customer' );
-    }
-}
-
-class Address extends Model {
-
-    public $customer;
-}
-
-class CamelCase extends Model {
-
-}
 
 final class ModelTest extends DBTest {
 
-    public function testTableIsCorrect (): void {
+    public function testTableIsCorrect(): void {
 
         $this->assertEquals( 'customer', Customer::getTable() );
         $this->assertEquals( 'camel_case', ( new CamelCase() )->getTable() );
     }
 
-    protected function setUp (): void {
+    protected function setUp(): void {
 
         parent::setUp();
 
@@ -58,11 +32,10 @@ final class ModelTest extends DBTest {
      * @throws APIException
      * @throws IllegalStateException
      */
-    public function testQueryIsCorrect (): void {
+    public function testQueryIsCorrect(): void {
 
-        $customer            = new Customer();
+        $customer = new Customer();
         $customer->firstName = "Peter";
-        $this->assertEquals( "INSERT INTO customer( first_name, name ) VALUES ( ?, ? )", $customer->createQueryAndParameters()[ "query" ] );
 
         $customer->save();
 
@@ -70,8 +43,6 @@ final class ModelTest extends DBTest {
         $this->assertEquals( $customer->firstName, $data->first_name );
 
         $customer->save();
-
-        $this->assertEquals( "UPDATE customer SET first_name = ?, name = ? WHERE id = ?", $customer->createQueryAndParameters()[ "query" ] );
 
         $customer->name = "Griffin";
         $customer->save();
@@ -91,12 +62,12 @@ final class ModelTest extends DBTest {
     /**
      * @throws Exception
      */
-    public function testGet (): void {
+    public function testGet(): void {
 
-        $customer     = new Customer();
+        $customer = new Customer();
         $customer->id = 1;
 
-        $camelCase     = new CamelCase();
+        $camelCase = new CamelCase();
         $camelCase->id = 1;
 
         $this->connection->createQuery( "INSERT INTO customer(id) VALUES(1)" )->execute();
@@ -111,16 +82,16 @@ final class ModelTest extends DBTest {
         $this->assertNull( CamelCase::get( 1 ) );
     }
 
-    public function testHasOne () {
+    public function testHasOne() {
 
-        $customer     = new Customer;
+        $customer = new Customer;
         $customer->id = 1;
 
         $this->connection->createQuery( "INSERT INTO address(id, customer_id) VALUES(1,1)" )->execute();
 
         $this->assertEquals( $customer, $customer->address->customer );
 
-        $customer          = new Customer();
+        $customer = new Customer();
         $customer->address = null;
 
         $this->assertNull( $customer->address );
@@ -128,23 +99,44 @@ final class ModelTest extends DBTest {
         $this->assertNull( $customer->address );
     }
 
-    function testHasMany () {
+    function testHasMany() {
 
-        $customer     = new Customer;
+        $customer = new Customer;
         $customer->id = 1;
 
         $this->connection->createQuery( "INSERT INTO customer(id) VALUES(1)" )->execute();
         $this->connection->createQuery( "INSERT INTO customer(id, customer_id) VALUES(2,1)" )->execute();
         $this->connection->createQuery( "INSERT INTO customer(id, customer_id) VALUES(3,1)" )->execute();
 
-        $parent1     = new Customer();
+        $parent1 = new Customer();
         $parent1->id = 2;
-        $parent2     = new Customer();
+        $parent2 = new Customer();
         $parent2->id = 3;
-        $parents     = [ $parent1, $parent2 ];
+        $parents = [ $parent1, $parent2 ];
 
 
         $this->assertEquals( $parents, $customer->parents );
+    }
+
+    /**
+     * @throws APIException
+     * @throws IllegalStateException
+     */
+    function testDerived() {
+
+        $this->connection->createQuery( "CREATE TABLE animal(id INTEGER PRIMARY KEY AUTOINCREMENT, class varchar(255))" )->execute();
+
+        $dog = new Dog();
+        $dog->save();
+
+        $animal = new Animal( (object)[ "id" => 1 ] );
+
+        $this->assertEquals( $dog, Dog::get( 1 ) );
+        $this->assertNull( Dog::get( 2 ) );
+        $this->assertEquals( $animal, Animal::get( 1 ) );
+        $this->assertNull( Cat::get( 1 ) );
+
+        $this->assertEquals( $dog, Dog::find()->where( "id", 1 )->get() );
     }
 }
 

@@ -8,29 +8,29 @@ class WhereClause extends Clause {
     private $operation;
     private $value;
 
-    public function __construct ( $name, $value, $operation = "=" ) {
+    public function __construct( $name, $value, $operation = "=" ) {
 
-        $this->name      = $name;
+        $this->name = $name;
         $this->operation = $operation;
-        $this->value     = $value;
+        $this->value = $value;
     }
 
-    public function get (): string {
+    public function convert( &$parts, &$parameters ) {
 
         switch ( $this->operation ) {
             case "not in":
             case "in":
-                return "$this->name $this->operation ( ? )";
+                $parts[] = "`$this->name` $this->operation ( ? )";
+                break;
+
+            default:
+                $parts[] = "`$this->name` $this->operation ?";
+                break;
         }
 
-        return "$this->name $this->operation ?";
-    }
-
-    public function getValue () {
-
         if ( is_array( $this->value ) )
-            return join( ", ", $this->value );
-
-        return $this->value;
+            $parameters[] = join( ", ", $this->value );
+        else
+            $parameters[] = $this->value;
     }
 }

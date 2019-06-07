@@ -10,23 +10,23 @@ use Mephiztopheles\webf\Model\Model;
 
 class ManyToManyRelation extends Relation {
 
-    public function update () {
+    public function update() {
         // TODO: Implement update() method.
     }
 
-    public function get () {
+    public function get() {
 
         try {
 
             $statement = App::getConnection()->createQuery( "SELECT * FROM $this->table WHERE $this->privateKey = ?" );
 
             $statement->setParameter( 0, $this->entity->id );
-            $data    = $statement->list();
+            $data = $statement->list();
             $results = [];
 
             foreach ( $data as $values ) {
 
-                $instace = new $this->class($values);
+                $instace = new $this->class( $values );
                 $results[] = $instace;
             }
 
@@ -42,7 +42,7 @@ class ManyToManyRelation extends Relation {
     /**
      * @param Model $entity
      */
-    public function add ( Model $entity ) {
+    public function add( Model $entity ) {
 
         try {
 
@@ -57,7 +57,7 @@ class ManyToManyRelation extends Relation {
         }
     }
 
-    public function remove ( Model $entity ) {
+    public function remove( Model $entity ) {
 
     }
 }

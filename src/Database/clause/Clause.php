@@ -2,9 +2,9 @@
 
 namespace Mephiztopheles\webf\Database\clause;
 
-abstract class Clause {
+use Mephiztopheles\webf\Database\QueryBuilder;
 
-    public abstract function get (): string;
+abstract class Clause extends QueryBuilder {
 
-    public abstract function getValue ();
+    public abstract function convert( &$parts, &$parameters );
 }

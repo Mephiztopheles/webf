@@ -6,6 +6,7 @@ namespace Mephiztopheles\webf\Routing;
  *
  * Holds request information
  * Class Request
+ *
  * @package Routing
  */
 class Request {
@@ -17,22 +18,23 @@ class Request {
     public $body;
     public $query;
 
-    public function __construct () {
+    public function __construct() {
 
         $this->serverProtocol = $_SERVER[ "SERVER_PROTOCOL" ];
-        $this->documentRoot   = $_SERVER[ "DOCUMENT_ROOT" ];
-        $this->requestUri     = $_SERVER[ "REQUEST_URI" ];
-        $this->requestMethod  = $_SERVER[ "REQUEST_METHOD" ];
+        $this->documentRoot = $_SERVER[ "DOCUMENT_ROOT" ];
+        $this->requestUri = $_SERVER[ "REQUEST_URI" ];
+        $this->requestMethod = $_SERVER[ "REQUEST_METHOD" ];
 
-        $this->body  = $this->getBody();
+        $this->body = $this->getBody();
         $this->query = $this->getQuery();
     }
 
     /**
      * retrieves POST input decoded from JSON
+     *
      * @return mixed|null
      */
-    private function getBody () {
+    private function getBody() {
 
         if ( $this->requestMethod === "GET" )
             return null;
@@ -42,9 +44,10 @@ class Request {
 
     /**
      * retrieves GET input as stdClass and automatically parses numeric parameters
+     *
      * @return mixed
      */
-    private function getQuery () {
+    private function getQuery() {
 
         $output = json_decode( json_encode( $_GET ) );
 

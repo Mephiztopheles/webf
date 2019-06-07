@@ -13,11 +13,11 @@ class User extends Model {
 
     private $roles = [];
 
-    public function getDisplayName () {
+    public function getDisplayName() {
         return isset( $this->userName ) ? $this->userName : "$this->firstName $this->lastName";
     }
 
-    public function getRoles () {
+    public function getRoles() {
         return $this->belongsToMany( Role::class );
     }
 }

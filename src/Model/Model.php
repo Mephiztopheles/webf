@@ -28,7 +28,7 @@ abstract class Model {
 
     protected $dates = [];
 
-    public function __construct ( $data = null ) {
+    public function __construct( $data = null ) {
 
         if ( isset( $data ) ) {
 
@@ -44,10 +44,11 @@ abstract class Model {
 
     /**
      * @param string $name
+     *
      * @return mixed
      * @throws ReflectionException
      */
-    public function __get ( string $name ) {
+    public function __get( string $name ) {
 
         $method = "get" . ucfirst( $name );
         if ( method_exists( $this, $method ) ) {
@@ -73,7 +74,7 @@ abstract class Model {
             $value = $reflectedProperty->getValue( $this );
         } else {
 
-            $value       = null;
+            $value = null;
             $this->$name = $value;
         }
 
@@ -82,10 +83,11 @@ abstract class Model {
 
     /**
      * @param string $name
-     * @param mixed $value
+     * @param mixed  $value
+     *
      * @throws ReflectionException
      */
-    public function __set ( string $name, $value ): void {
+    public function __set( string $name, $value ): void {
 
         if ( !property_exists( $this, $name ) )
             $this->$name = null;
@@ -107,11 +109,11 @@ abstract class Model {
         }
     }
 
-    public static function getTable () {
+    public static function getTable() {
         return self::toSnakeCase( self::className() );
     }
 
-    public static function className () {
+    public static function className() {
 
         $path = explode( '\\', get_called_class() );
         return array_pop( $path );
@@ -121,12 +123,13 @@ abstract class Model {
      * @throws APIException
      * @throws IllegalStateException
      */
-    public function save () {
+    public function save() {
 
+        $class = get_called_class();
 
         $qb = new QueryBuilder();
 
-        $qb->table( $this->getTable() );
+        $qb->table( $class::getTable() );
         if ( isset( $this->id ) )
             $qb->update( $this );
         else
@@ -137,89 +140,62 @@ abstract class Model {
     }
 
     /**
-     * @return array
-     */
-    public function createQueryAndParameters () {
-
-        $parameters = [];
-
-        if ( isset( $this->id ) ) {
-
-            $query  = "UPDATE " . $this->getTable() . " SET";
-            $values = [];
-
-            foreach ( $this->getProperties( true ) as $k => $v ) {
-
-                if ( $k == "id" || $v instanceof Model )
-                    continue;
-
-                $k        = self::toSnakeCase( $k );
-                $values[] = " $k = ?";
-
-                $parameters[] = $v;
-            }
-
-            $query .= join( ",", $values );
-            $query .= " WHERE id = ?";
-
-            $parameters[] = $this->id;
-
-        } else {
-
-            $query = "INSERT INTO " . $this->getTable();
-
-            $fields = [];
-            $values = [];
-
-            foreach ( $this->getProperties( true ) as $k => $v ) {
-
-                if ( $k == "id" || $v instanceof Model )
-                    continue;
-
-                $k = self::toSnakeCase( $k );
-
-                $fields[] = $k;
-                $values[] = "?";
-
-                $parameters[] = $v;
-            }
-
-            $query .= "( " . join( ", ", $fields ) . " ) VALUES ( " . join( ", ", $values ) . " )";
-        }
-
-        return [ "query" => $query, "parameters" => $parameters ];
-    }
-
-    /**
      * @param int $id
+     *
      * @return null
      * @throws APIException
      * @throws IllegalStateException
      */
-    public static function get ( int $id ) {
+    public static function get( int $id ) {
 
         $class = get_called_class();
+        $parent = get_parent_class( $class );
 
-        $statement = App::getConnection()->createQuery( "SELECT * FROM " . self::getTable() . " WHERE id = ?" );
-        $statement->setParameter( 0, $id );
-        $data = $statement->get();
+        $table = $class::getTable();
+
+        $qb = new QueryBuilder();
+        $qb->table( $table )->where( "id", $id );
+
+        if ( $parent != self::class && $table != self::getTable() )
+            $qb->where( "class", $class );
+
+        $data = $qb->get();
 
         if ( !isset( $data ) )
             return null;
 
-        $instance     = new $class( $data );
+        $instance = new $class( $data );
         $instance->id = $id;
 
         return $instance;
+    }
+
+    public static function find() {
+
+        $class = get_called_class();
+        $parent = get_parent_class( $class );
+
+        $table = $class::getTable();
+
+        $qb = new QueryBuilder();
+        $qb->table( $table );
+
+        if ( $parent != self::class && $table != self::getTable() )
+            $qb->where( "class", $class );
+
+        $qb->class( $class );
+
+        return $qb;
     }
 
     /**
      * @param string $class
      * @param string $foreignKey
      * @param string $privateKey
+     *
      * @return mixed
      */
-    protected final function hasOne ( string $class, string $foreignKey = null, string $privateKey = "id" ) {
+    protected final function hasOne( string $class, string $foreignKey = null, string $privateKey = "id" ) {
 
         if ( $foreignKey == null )
             $foreignKey = self::className() . "_id";
@@ -230,12 +206,13 @@ abstract class Model {
     }
 
     /**
-     * @param string $class
+     * @param string      $class
      * @param string|null $foreignKey
-     * @param string $privateKey
+     * @param string      $privateKey
+     *
      * @return mixed
      */
-    protected final function hasMany ( string $class, string $foreignKey = null, string $privateKey = "id" ) {
+    protected final function hasMany( string $class, string $foreignKey = null, string $privateKey = "id" ) {
 
         if ( $foreignKey == null )
             $foreignKey = self::className() . "Id";
@@ -245,7 +222,7 @@ abstract class Model {
         return new OneToManyRelation( $this, $class, call_user_func( [ $class, "getTable" ] ), $foreignKey, $privateKey );
     }
 
-    protected final function belongsToMany ( string $class, string $table = null, string $foreignKey = null, string $privateKey = null ) {
+    protected final function belongsToMany( string $class, string $table = null, string $foreignKey = null, string $privateKey = null ) {
 
         $foreignTable = call_user_func( [ $class, "getTable" ] );
         $privateTable = $this->getTable();
@@ -272,9 +249,10 @@ abstract class Model {
 
     /**
      * @param array $attributes
+     *
      * @throws Exception
      */
-    protected function fill ( $attributes ) {
+    protected function fill( $attributes ) {
 
         foreach ( $this->getProperties() as $k ) {
 
@@ -295,11 +273,11 @@ abstract class Model {
         }
     }
 
-    private static function parameterIsKeyWord ( string $name ): bool {
+    private static function parameterIsKeyWord( string $name ): bool {
         return in_array( $name, self::$protectedKeyWords );
     }
 
-    private function getProperties ( bool $values = false ): array {
+    private function getProperties( bool $values = false ): array {
 
         $properties = [];
 
@@ -343,7 +321,7 @@ abstract class Model {
         return $properties;
     }
 
-    private static function toSnakeCase ( $input ) {
+    private static function toSnakeCase( $input ) {
 
         preg_match_all( '!([A-Z][A-Z0-9]*(?=$|[A-Z][a-z0-9])|[A-Za-z][a-z0-9]*)!', $input, $matches );
         $ret = $matches[ 0 ];

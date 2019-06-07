@@ -15,7 +15,7 @@ class History extends Model {
 
     protected $dates = [ "date" ];
 
-    public static function getTable () {
+    public static function getTable() {
         return self::$tableName;
     }
 }

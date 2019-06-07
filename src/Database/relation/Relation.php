@@ -15,16 +15,16 @@ abstract class Relation {
     protected $foreignKey;
     protected $privateKey;
 
-    public function __construct ( Model $entity, string $class, string $table, string $foreignKey, string $privateKey ) {
+    public function __construct( Model $entity, string $class, string $table, string $foreignKey, string $privateKey ) {
 
-        $this->entity     = $entity;
-        $this->class      = $class;
-        $this->table      = $table;
+        $this->entity = $entity;
+        $this->class = $class;
+        $this->table = $table;
         $this->foreignKey = $foreignKey;
         $this->privateKey = $privateKey;
     }
 
-    public abstract function update ();
+    public abstract function update();
 
-    public abstract function get ();
+    public abstract function get();
 }

@@ -9,7 +9,7 @@ use Mephiztopheles\webf\App\App;
 
 class OneToOneRelation extends Relation {
 
-    public function update () {
+    public function update() {
 
         try {
 
@@ -23,7 +23,7 @@ class OneToOneRelation extends Relation {
         }
     }
 
-    public function get () {
+    public function get() {
 
         try {
 
@@ -36,7 +36,7 @@ class OneToOneRelation extends Relation {
                 return null;
 
             $key = preg_replace( "/_id$/", "", $this->foreignKey );
-            echo $key;
+
             $data->$key = $this->entity;
 
             return new $this->class( $data );

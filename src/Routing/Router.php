@@ -7,9 +7,10 @@ use stdClass;
 
 /**
  * @param $url string
+ *
  * @return string
  */
-function cleanUri ( $url ) {
+function cleanUri( $url ) {
 
     $phpSelf = dirname( $_SERVER[ 'PHP_SELF' ] );
 
@@ -55,7 +56,7 @@ class Router {
     private $request;
 
     private $root;
-    private $rights               = [];
+    private $rights = [];
     private $supportedHttpMethods = array(
         "GET",
         "POST",
@@ -66,24 +67,27 @@ class Router {
 
     /**
      * Router constructor.
+     *
      * @param string $root
-     * @param array $rights
+     * @param array  $rights
      */
-    function __construct ( string $root, array $rights ) {
+    function __construct( string $root, array $rights ) {
 
-        $this->root     = $root;
-        $this->rights   = $rights;
+        $this->root = $root;
+        $this->rights = $rights;
         $this->response = new Response();
-        $this->request  = new Request();
+        $this->request = new Request();
     }
 
     /**
      * magic method
+     *
      * @param string $name Name of the method
-     * @param array $args arguments
+     * @param array  $args arguments
+     *
      * @throws Exception
      */
-    function __call ( string $name, array $args ) {
+    function __call( string $name, array $args ) {
 
         list( $route, $method ) = $args;
         array_splice( $args, 0, 2 );
@@ -106,9 +110,10 @@ class Router {
 
     /**
      * @param string $route
+     *
      * @return string
      */
-    private function formatRoute ( string $route ) {
+    private function formatRoute( string $route ) {
 
         // Make sure the route ends in a / since all of the URLs will
         $route = rtrim( $route, '/' ) . '/';
@@ -130,19 +135,20 @@ class Router {
         return $route;
     }
 
-    private function invalidMethodHandler () {
+    private function invalidMethodHandler() {
         $this->response->methodNotAllowed();
     }
 
-    private function defaultRequestHandler () {
+    private function defaultRequestHandler() {
         $this->response->notFound();
     }
 
     /**
      * @param $descriptor
+     *
      * @return bool
      */
-    private function checkAccess ( $descriptor ) {
+    private function checkAccess( $descriptor ) {
 
         if ( empty( $descriptor->rights ) )
             return true;
@@ -162,9 +168,9 @@ class Router {
     /**
      * checks the routes and calls the Controller
      */
-    private function resolve () {
+    private function resolve() {
 
-        $uri           = cleanUri( $this->request->requestUri );
+        $uri = cleanUri( $this->request->requestUri );
         $requestMethod = strtolower( $this->request->requestMethod );
 
         if ( in_array( $requestMethod, $this->supportedHttpMethods ) )
@@ -192,8 +198,8 @@ class Router {
 
                     if ( gettype( $descriptor->method ) == "string" ) {
 
-                        $parts  = explode( "@", $descriptor->method );
-                        $clazz  = $parts[ 0 ];
+                        $parts = explode( "@", $descriptor->method );
+                        $clazz = $parts[ 0 ];
                         $method = $parts[ 1 ];
 
                         $result = call_user_func_array( array( new $clazz(), $method ), $params );
@@ -225,7 +231,7 @@ class Router {
         $this->defaultRequestHandler();
     }
 
-    function __destruct () {
+    function __destruct() {
         $this->resolve();
     }
 }

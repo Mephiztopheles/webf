@@ -16,14 +16,15 @@ class Connection {
 
     /**
      * Connection constructor.
-     * @param $host string
-     * @param $port integer
-     * @param $database string
-     * @param $user string
-     * @param $password string
+     *
+     * @param        $host     string
+     * @param        $port     integer
+     * @param        $database string
+     * @param        $user     string
+     * @param        $password string
      * @param string $type
      */
-    public function __construct ( $host, $port, $database, $user, $password, $type = "MYSQL" ) {
+    public function __construct( $host, $port, $database, $user, $password, $type = "MYSQL" ) {
 
         switch ( $type ) {
             case "MYSQL":
@@ -41,13 +42,13 @@ class Connection {
 
     /**
      * @param $attribute int
-     * @param $value mixed
+     * @param $value     mixed
      */
-    public function setAttribute ( $attribute, $value ): void {
+    public function setAttribute( $attribute, $value ): void {
         $this->pdo->setAttribute( $attribute, $value );
     }
 
-    public function transactional ( $function ) {
+    public function transactional( $function ) {
 
         $this->beginTransaction();
 
@@ -61,31 +62,32 @@ class Connection {
         }
     }
 
-    public function beginTransaction (): void {
+    public function beginTransaction(): void {
         $this->pdo->beginTransaction();
     }
 
-    public function commit (): void {
+    public function commit(): void {
         $this->pdo->commit();
     }
 
-    public function rollBack (): void {
+    public function rollBack(): void {
         $this->pdo->rollBack();
     }
 
     /**
      * retrieves last insert id
+     *
      * @return int
      */
-    public function lastInsertId (): int {
+    public function lastInsertId(): int {
         return intval( $this->pdo->lastInsertId() );
     }
 
-    public function pdo (): PDO {
+    public function pdo(): PDO {
         return $this->pdo;
     }
 
-    public function createQuery ( string $query ): Statement {
+    public function createQuery( string $query ): Statement {
         return new Statement( $this, $query );
     }
 }
