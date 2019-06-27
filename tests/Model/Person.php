@@ -10,4 +10,8 @@ class Person extends Model {
 
     public $firstName;
     public $name;
+
+    public $birthday;
+
+    static $dates = [ "birthday" ];
 }

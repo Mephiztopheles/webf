@@ -3,6 +3,8 @@
 namespace Mephiztopheles\webf\App;
 
 
+use DateTime;
+use Exception;
 use Mephiztopheles\webf\Exception\IllegalStateException;
 use Mephiztopheles\webf\Database\Connection;
 
@@ -44,5 +46,33 @@ class App {
 
     private static function syslog( $priority, $message ) {
         syslog( $priority, $message );
+    }
+
+    /**
+     * @param $value
+     *
+     * @return DateTime
+     * @throws Exception
+     */
+    public static function toDateTime( $value ) {
+
+        if ( $value == null )
+            return null;
+
+        if ( gettype( $value ) == "string" && !preg_match( "/^\d+$/", $value ) ) {
+            $dateTime = new DateTime( $value );
+        } else {
+
+            $dateTime = new DateTime();
+            $dateTime->setTimestamp( intval( $value ) );
+        }
+
+        return $dateTime;
+    }
+
+    public static function toTimestamp( $value ) {
+        if ( $value == null )
+            return null;
+        return $value->getTimestamp();
     }
 }

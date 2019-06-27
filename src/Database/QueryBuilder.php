@@ -156,13 +156,18 @@ class QueryBuilder {
         $values = [];
         $parameters = [];
 
+        $dates = $object::$dates;
+
         foreach ( $object as $k => $v ) {
 
             $k = self::toSnakeCase( $k );
             $fields[] = "`$k`";
             $values[] = "?";
 
-            $parameters[] = $v;
+            if ( in_array( $k, $dates ) )
+                $parameters[] = App::toTimestamp( $v );
+            else
+                $parameters[] = $v;
         }
 
         if ( $parent != Model::class && $this->table == $parent::getTable() ) {

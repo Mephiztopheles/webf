@@ -16,7 +16,7 @@ class ControllerTest extends DBTest {
     protected function setUp(): void {
 
         parent::setUp();
-        $this->connection->createQuery( "CREATE TABLE person(id INTEGER PRIMARY KEY AUTOINCREMENT, person_id INTEGER, name varchar(255), first_name varchar(255))" )->execute();
+        $this->connection->createQuery( "CREATE TABLE person(id INTEGER PRIMARY KEY AUTOINCREMENT, person_id INTEGER, name varchar(255), first_name varchar(255), birthday TIMESTAMP)" )->execute();
     }
 
     /**
@@ -26,10 +26,15 @@ class ControllerTest extends DBTest {
 
         $controller = new PersonController();
 
-        $person = new Person();
+        $date = new DateTime( "now" );
+        $data = new stdClass();
+
+        $data->birthday = $date->getTimestamp();
+        $person = new Person( $data );
+
         $person->save();
 
-        $this->expectOutputString( "{\"firstName\":null,\"name\":null,\"id\":1}" );
+        $this->expectOutputString( "{\"firstName\":null,\"name\":null,\"birthday\":" . $date->getTimestamp() . ",\"id\":1}" );
         $controller->get( new Response(), 1 )->send();
     }
 }

@@ -13,7 +13,7 @@ class History extends Model {
     private $type;
     private $user;
 
-    protected $dates = [ "date" ];
+    protected static $dates = [ "date" ];
 
     public static function getTable() {
         return self::$tableName;

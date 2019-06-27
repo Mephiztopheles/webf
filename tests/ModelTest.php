@@ -139,4 +139,3 @@ final class ModelTest extends DBTest {
         $this->assertEquals( $dog, Dog::find()->where( "id", 1 )->get() );
     }
 }
-

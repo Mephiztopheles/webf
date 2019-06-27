@@ -2,8 +2,8 @@
 
 namespace Mephiztopheles\webf\Model;
 
-use DateTime;
 use Exception;
+use JsonSerializable;
 use Mephiztopheles\webf\App\App;
 use Mephiztopheles\webf\Database\QueryBuilder;
 use Mephiztopheles\webf\Database\relation\ManyToManyRelation;
@@ -17,16 +17,16 @@ use ReflectionException;
 use ReflectionMethod;
 use ReflectionProperty;
 use RuntimeException;
+use stdClass;
 
 const lazyLoad = [];
 
-abstract class Model {
-
-    private static $protectedKeyWords = [ "dates", "lazyLoad" ];
+abstract class Model implements JsonSerializable {
 
     public $id;
 
-    protected $dates = [];
+    protected static $transients = [];
+    protected static $dates = [];
 
     public function __construct( $data = null ) {
 
@@ -58,7 +58,6 @@ abstract class Model {
                 throw new RuntimeException( "The $method method is not public." );
 
             if ( !isset( $this->$name ) ) {
-
 
                 $this->$name = $reflection->invoke( $this );
                 if ( $this->$name instanceof Relation )
@@ -256,25 +255,42 @@ abstract class Model {
 
         foreach ( $this->getProperties() as $k ) {
 
-            if ( self::parameterIsKeyWord( $k ) )
-                continue;
-
             $snakeCase = self::toSnakeCase( $k );
+
+            $value = null;
             if ( isset( $attributes->$snakeCase ) )
-                $this->$k = $attributes->$snakeCase;
-            else
-                $this->$k = null;
+                $value = $attributes->$snakeCase;
 
-            if ( !empty( $this->dates ) ) {
+            $class = get_called_class();
 
-                if ( in_array( $k, $this->dates ) )
-                    $this->$k = new DateTime( $this->$k );
-            }
+            $dates = $class::$dates;
+            if ( !empty( $dates ) )
+                if ( in_array( $k, $dates ) )
+                    $value = App::toDateTime( $value );
+
+            $this->$k = $value;
         }
     }
 
-    private static function parameterIsKeyWord( string $name ): bool {
-        return in_array( $name, self::$protectedKeyWords );
+    protected function serialize() {
+
+        $data = new stdClass();
+
+        $values = $this->getProperties( true );
+
+        foreach ( $values as $k => $v ) {
+
+            $data->$k = $v;
+
+            $class = get_called_class();
+
+            $dates = $class::$dates;
+            if ( !empty( $dates ) )
+                if ( in_array( $k, $dates ) )
+                    $data->$k = App::toTimestamp( $v );
+        }
+
+        return $data;
     }
 
     private function getProperties( bool $values = false ): array {
@@ -285,37 +301,29 @@ abstract class Model {
 
             $reflection = new ReflectionClass( $this );
 
-            foreach ( $reflection->getProperties() as $property ) {
+            $classProperties = $reflection->getProperties();
+            $static = $reflection->getProperties( ReflectionProperty::IS_STATIC );
+            $classProperties = array_diff( $classProperties, $static );
+
+            foreach ( $classProperties as $property ) {
 
                 $key = $property->getName();
-
-                if ( self::parameterIsKeyWord( $key ) )
-                    continue;
 
                 if ( $values ) {
 
                     $property->setAccessible( true );
+
                     if ( isset( $this->$key ) )
                         $properties[ $key ] = $property->getValue( $this );
                     else
                         $properties[ $key ] = null;
+
                 } else {
                     $properties[] = $key;
                 }
             }
 
         } catch ( ReflectionException $e ) {
-        }
-
-        foreach ( $this as $key => $value ) {
-
-            if ( self::parameterIsKeyWord( $key ) )
-                continue;
-
-            if ( $values )
-                $properties[ $key ] = $value;
-            else
-                $properties[] = $key;
         }
 
         return $properties;
@@ -330,5 +338,13 @@ abstract class Model {
             $match = $match == strtoupper( $match ) ? strtolower( $match ) : lcfirst( $match );
 
         return implode( '_', $ret );
+    }
+
+
+    public function jsonSerialize() {
+
+        $data = $this->serialize();
+
+        return get_object_vars( $data );
     }
 }

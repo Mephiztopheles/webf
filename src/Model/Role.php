@@ -8,4 +8,6 @@ class Role extends Model {
 
     public $name;
     public $description;
+
+    static $transients = [];
 }
